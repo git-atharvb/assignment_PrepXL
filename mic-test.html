@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Live Transcription</title>
+
+<style>
+    * {
+        box-sizing: border-box;
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont;
+    }
+
+    body {
+        margin: 0;
+        height: 100vh;
+        background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+    }
+
+    .card {
+        background: rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(12px);
+        border-radius: 16px;
+        padding: 32px 40px;
+        width: 360px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+        text-align: center;
+    }
+
+    .title {
+        font-size: 22px;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+
+    .subtitle {
+        font-size: 14px;
+        opacity: 0.75;
+        margin-bottom: 28px;
+    }
+
+    .buttons {
+        display: flex;
+        gap: 12px;
+    }
+
+    button {
+        flex: 1;
+        padding: 14px 0;
+        border-radius: 10px;
+        border: none;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    #start {
+        background: #22c55e;
+        color: #0f172a;
+    }
+
+    #start:hover {
+        background: #16a34a;
+        transform: translateY(-1px);
+    }
+
+    #stop {
+        background: #ef4444;
+        color: #fff;
+    }
+
+    #stop:hover {
+        background: #dc2626;
+        transform: translateY(-1px);
+    }
+
+    .status {
+        margin-top: 20px;
+        font-size: 13px;
+        opacity: 0.7;
+    }
+
+    .pulse {
+        margin: 24px auto 0;
+        width: 14px;
+        height: 14px;
+        background: #22c55e;
+        border-radius: 50%;
+        animation: pulse 1.5s infinite;
+        display: none;
+    }
+
+    @keyframes pulse {
+        0% {
+            transform: scale(1);
+            opacity: 0.7;
+        }
+        50% {
+            transform: scale(1.6);
+            opacity: 0.2;
+        }
+        100% {
+            transform: scale(1);
+            opacity: 0.7;
+        }
+    }
+</style>
+</head>
+
+<body>
+
+<div class="card">
+    <div class="title">Live Transcription</div>
+    <div class="subtitle">Real-time speech streaming</div>
+
+    <div class="buttons">
+        <button id="start">Start</button>
+        <button id="stop">Stop</button>
+    </div>
+
+    <div class="pulse" id="pulse"></div>
+
+    <div class="status" id="status">
+        Microphone idle
+    </div>
+</div>
+
+<script>
+let audioContext;
+let processor;
+let socket;
+
+const SAMPLE_RATE = 16000;
+const PROCESSOR_SIZE = 1024;
+const TARGET_CHUNK = 320;
+
+let pcmBuffer = [];
+
+const statusEl = document.getElementById("status");
+const pulseEl = document.getElementById("pulse");
+
+document.getElementById("start").onclick = async () => {
+
+    console.log("Start clicked");
+
+    statusEl.textContent = "Connecting...";
+    pulseEl.style.display = "block";
+
+    socket = new WebSocket("ws://localhost:8080/ws/transcribe");
+    socket.binaryType = "arraybuffer";
+
+    socket.onopen = async () => {
+        console.log("WS connected");
+        statusEl.textContent = "Recording...";
+
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
+        await audioContext.resume();
+
+        const source = audioContext.createMediaStreamSource(stream);
+        processor = audioContext.createScriptProcessor(PROCESSOR_SIZE, 1, 1);
+
+        source.connect(processor);
+        processor.connect(audioContext.destination);
+
+        processor.onaudioprocess = e => {
+            const input = e.inputBuffer.getChannelData(0);
+
+            for (let i = 0; i < input.length; i++) {
+                pcmBuffer.push(input[i]);
+            }
+
+            while (pcmBuffer.length >= TARGET_CHUNK) {
+                const chunk = pcmBuffer.slice(0, TARGET_CHUNK);
+                pcmBuffer = pcmBuffer.slice(TARGET_CHUNK);
+
+                const pcm16 = floatTo16BitPCM(chunk);
+
+                if (socket.readyState === WebSocket.OPEN) {
+                    socket.send(pcm16);
+                }
+            }
+        };
+    };
+
+    socket.onclose = () => {
+        statusEl.textContent = "Disconnected";
+        pulseEl.style.display = "none";
+    };
+
+    socket.onerror = () => {
+        statusEl.textContent = "Connection error";
+        pulseEl.style.display = "none";
+    };
+};
+
+document.getElementById("stop").onclick = () => {
+    processor?.disconnect();
+    audioContext?.close();
+    socket?.close();
+    statusEl.textContent = "Stopped";
+    pulseEl.style.display = "none";
+};
+
+function floatTo16BitPCM(float32Array) {
+    const buffer = new ArrayBuffer(float32Array.length * 2);
+    const view = new DataView(buffer);
+    let offset = 0;
+    for (let i = 0; i < float32Array.length; i++, offset += 2) {
+        let s = Math.max(-1, Math.min(1, float32Array[i]));
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    }
+    return buffer;
+}
+</script>
+
+</body>
+</html>

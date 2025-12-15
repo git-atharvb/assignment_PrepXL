@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Circular Audio Equalizer Console</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>🎧 Circular Audio Equalizer</h1>
+    <h3>Designed By : Atharv Bowlekar</h3>
+    <div class="controls">
+      <button id="startBtn">Start Listening</button>
+      <button id="stopBtn" disabled>Stop</button>
+      <button id="pauseBtn" disabled>Pause Visual</button>
+      <label>
+        Sensitivity
+        <input type="range" id="gain" min="0.5" max="3" step="0.1" value="1">
+      </label>
+      <label>
+        FFT Size
+        <select id="fft">
+          <option value="128">128</option>
+          <option value="256" selected>256</option>
+          <option value="512">512</option>
+          <option value="1024">1024</option>
+        </select>
+      </label>
+      <label>
+        Rotation Speed
+        <input type="range" id="rotation" min="0" max="0.01" step="0.001" value="0.003">
+      </label>
+      <button id="colorBtn">Spectrum Mode</button>
+    </div>
+    <canvas id="visualizer"></canvas>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html> 
